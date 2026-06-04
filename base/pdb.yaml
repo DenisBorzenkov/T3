@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-server
+  namespace: default
+  labels:
+    app: api-server
+spec:
+  # During voluntary disruptions (node drain, cluster upgrade) keep at least 2 pods
+  # serving, so a drain can never take the whole service down at once.
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api-server

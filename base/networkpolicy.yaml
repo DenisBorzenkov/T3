@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-server
+  namespace: default
+  labels:
+    app: api-server
+spec:
+  podSelector:
+    matchLabels:
+      app: api-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow HTTP in on the app port. Tighten `from` to the ingress-controller
+    # namespace/pods in a real cluster instead of leaving it open.
+    - ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    # DNS resolution — scoped to CoreDNS/kube-dns in kube-system, not the whole cluster.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Egress to PostgreSQL, scoped to the DB pods (NetworkPolicy matches pod IPs, not the
+    # Service IP). Assumes the postgres pods carry `app: postgres` in `default`; adjust the
+    # selector to the real DB labels (or use an ipBlock for an out-of-cluster managed DB).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - port: 5432
+          protocol: TCP
