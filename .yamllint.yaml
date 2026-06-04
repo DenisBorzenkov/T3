@@ -1,0 +1,17 @@
+# Relaxed yamllint: enforce real problems, not stylistic line-length/quoting noise.
+extends: default
+rules:
+  line-length: disable
+  document-start: disable
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  truthy:
+    check-keys: false        # allow GitHub Actions `on:` key
+  braces:
+    max-spaces-inside: 1     # allow readable flow maps: { path: /health, port: http }
+  brackets:
+    max-spaces-inside: 1
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
