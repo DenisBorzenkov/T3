@@ -1,0 +1,28 @@
+name: e2e
+
+on: push
+
+env:
+  KIND_VERSION: v0.27.0
+  KIND_SHA256: a6875aaea358acf0ac07786b1a6755d08fd640f4c79b7a2e46681cc13f49a04b
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install kind (checksum-verified)
+        run: |
+          curl -fsSLo ./kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  ./kind" | sha256sum -c -
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+
+      - name: Run kind e2e
+        env:
+          # DB connection string is injected from a repo Actions secret, never committed.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: ./test/run-test.sh --clean

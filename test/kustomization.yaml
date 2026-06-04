@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Test overlay: identical to the production set, but swaps the (non-existent)
+# ghcr.io/example/api-server image for traefik/whoami — a tiny real HTTP server
+# that exposes /health on a configurable port — so probes, the Service, rollouts
+# and HA behaviour can be exercised for real on kind.
+#
+# VPA is intentionally excluded: it needs the VPA operator/CRDs, which we do not
+# install in a throwaway cluster. vpa.yaml is validated separately by run-test.sh.
+namespace: default
+resources:
+  - ../base      # the production base (sibling dir); VPA excluded there (needs operator)
+images:
+  - name: ghcr.io/example/api-server
+    newName: traefik/whoami
+    newTag: v1.10.2
+patches:
+  - path: whoami-port-patch.yaml

@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+spec:
+  template:
+    spec:
+      containers:
+        - name: api-server
+          # Tell traefik/whoami to listen on 8080 to match the manifest's port.
+          env:
+            - name: WHOAMI_PORT_NUMBER
+              value: "8080"
