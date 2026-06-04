@@ -3,12 +3,14 @@ kind: HorizontalPodAutoscaler
 metadata:
   name: api-server
   namespace: default
+  labels:
+    app: api-server
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: api-server
-  minReplicas: 1
+  minReplicas: 3              # was 1 — keep the one-per-zone HA floor.
   maxReplicas: 10
   metrics:
     - type: Resource
@@ -16,4 +18,17 @@ spec:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 95
+          averageUtilization: 70   # was 95 — scale before pods choke, leaving headroom for spikes + new-pod startup.
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300   # slow, deliberate scale-down to avoid flapping.
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
