@@ -3,7 +3,9 @@ kind: ConfigMap
 metadata:
   name: api-server-config
   namespace: default
+  labels:
+    app: api-server
 data:
-  LOG_LEVEL: "debug"
-  DATABASE_URL: "postgresql://scott:tiger@192.168.1.42:5432/appdb"
+  # Only non-sensitive config lives here now. DATABASE_URL moved to the Secret.
+  LOG_LEVEL: "info"   # was "debug" — noisy, slower, can leak sensitive data in prod
   CACHE_TTL: "300"

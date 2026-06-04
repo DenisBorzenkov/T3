@@ -3,13 +3,16 @@ kind: Deployment
 metadata:
   name: api-server
   namespace: default
+  labels:
+    app: api-server
 spec:
-  replicas: 1
+  replicas: 3                       # was 1 (SPOF). 3 = one per AZ.
+  revisionHistoryLimit: 5
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 100%
-      maxSurge: 0
+      maxUnavailable: 0             # was 100% — guaranteed downtime on every rollout.
+      maxSurge: 1                   # bring a new pod up & Ready before removing an old one.
   selector:
     matchLabels:
       app: api-server
@@ -18,16 +21,92 @@ spec:
       labels:
         app: api-server
     spec:
-      automountServiceAccountToken: true
+      serviceAccountName: api-server
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      # Pod-level security context — run as an unprivileged, non-root user.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # Survive a zone failure: spread replicas one-per-zone. With 3 replicas and
+      # 3 zones this forces an even spread; a zone outage loses at most 1 pod.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: api-server
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: api-server
+      affinity:
+        # Soft: avoid co-locating two replicas on the same node when possible.
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: api-server
       containers:
         - name: api-server
-          image: ghcr.io/example/api-server:latest
-          imagePullPolicy: Always
+          # Pin by tag+digest in real prod for deterministic rollouts/rollbacks.
+          # :latest + Always is non-deterministic and re-pulls on every start.
+          image: ghcr.io/example/api-server:1.0.0
+          imagePullPolicy: IfNotPresent   # cached image survives a registry outage on restart
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
           envFrom:
             - configMapRef:
                 name: api-server-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: api-server-db
+                  key: DATABASE_URL
+          resources:
+            requests:               # without requests: BestEffort QoS + HPA cannot compute CPU%
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # Container-level hardening.
           securityContext:
-            allowPrivilegeEscalation: true
-            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # Startup gates traffic until the app is actually up; readiness keeps
+          # traffic off un-ready pods during rollouts; liveness restarts hung pods.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 2
+            failureThreshold: 30    # up to ~60s to become ready before being killed
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              # Give the LB time to drop this pod from endpoints before it exits,
+              # so in-flight requests are not cut. Combine with SIGTERM handling.
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]

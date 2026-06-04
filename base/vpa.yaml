@@ -3,10 +3,25 @@ kind: VerticalPodAutoscaler
 metadata:
   name: api-server
   namespace: default
+  labels:
+    app: api-server
 spec:
   targetRef:
     apiVersion: apps/v1
     kind: Deployment
     name: api-server
   updatePolicy:
-    updateMode: Auto
+    # HPA already scales this Deployment on CPU. VPA in "Auto" mode would fight it
+    # (both mutate CPU) and evict pods to resize them. So VPA is recommendation-only:
+    # it surfaces right-sizing suggestions without touching live pods.
+    updateMode: "Off"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: api-server
+        minAllowed:
+          cpu: 50m
+          memory: 64Mi
+        maxAllowed:
+          cpu: "1"
+          memory: 512Mi
+        controlledResources: ["cpu", "memory"]

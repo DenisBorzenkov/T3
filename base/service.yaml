@@ -3,10 +3,13 @@ kind: Service
 metadata:
   name: api-server
   namespace: default
+  labels:
+    app: api-server
 spec:
   selector:
-    app: api
+    app: api-server          # was "app: api" — matched no pods, Service had zero endpoints.
   ports:
-    - port: 80
-      targetPort: 8080
+    - name: http
+      port: 80
+      targetPort: http       # named port — survives container port changes.
   type: ClusterIP
